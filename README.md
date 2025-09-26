@@ -10,7 +10,7 @@ SPA, is an advanced segmentation framework that efficiently adapts to diverse te
 
 [SPA: Efficient User-Preference Alignment against Uncertainty in Medical Image Segmentation](https://arxiv.org/abs/2411.15513) (ICCV 2025)
 
-and [SPA webpage](https://supermedintel.github.io/SPA/). 
+and [SPA webpage](https://ImprintLab.github.io/SPA/).
 
 ## 🔥 A Quick Overview 
  <div align="center"><img width="880" height="400" src="https://github.com/SuperMedIntel/SPA/blob/main/static/assets/images/facial.png"></div>
