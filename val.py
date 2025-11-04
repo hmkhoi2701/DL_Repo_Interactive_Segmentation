@@ -37,13 +37,13 @@ checkpoint_file = os.path.join(args.weights)
 assert os.path.exists(checkpoint_file)
 loc = 'cuda:{}'.format(args.gpu_device)
 checkpoint = torch.load(checkpoint_file, map_location=loc)
-start_epoch = checkpoint['epoch'] - 1
+start_epoch = 0 #checkpoint['epoch'] - 1
 
-state_dict = checkpoint['state_dict']
-net.load_state_dict(state_dict)
-net.EM_weights.weights = checkpoint['EM_weights']
-net.EM_mean_variance.means = checkpoint['EM_means']
-net.EM_mean_variance.variances = checkpoint['EM_variances']
+# state_dict = checkpoint['state_dict']
+# net.load_state_dict(state_dict)
+# net.EM_weights.weights = checkpoint['EM_weights']
+# net.EM_mean_variance.means = checkpoint['EM_means']
+# net.EM_mean_variance.variances = checkpoint['EM_variances']
 
 
 args.path_helper = set_log_dir('logs', args.exp_name)
@@ -78,8 +78,8 @@ if args.dataset == 'REFUGE':
     refuge_train_dataset = REFUGE(args, args.data_path, transform = transform_train, transform_msk= transform_train_seg, mode = 'Training')
     refuge_test_dataset = REFUGE(args, args.data_path, transform = transform_test, transform_msk= transform_test_seg, mode = 'Test')
 
-    nice_train_loader = DataLoader(refuge_train_dataset, batch_size=args.b, shuffle=True, num_workers=8, pin_memory=True)
-    nice_test_loader = DataLoader(refuge_test_dataset, batch_size=args.b, shuffle=False, num_workers=8, pin_memory=True)
+    nice_train_loader = DataLoader(refuge_train_dataset, batch_size=args.b, shuffle=True, pin_memory=True)
+    nice_test_loader = DataLoader(refuge_test_dataset, batch_size=args.b, shuffle=False, pin_memory=True)
     '''end'''
 
 '''begain valuation'''

@@ -50,8 +50,8 @@ class REFUGE(Dataset):
         name = subfolder.split('/')[-1]
 
         # raw image and raters path
-        img_path = os.path.join(subfolder, name + '_cropped.jpg')
-        multi_rater_cup_path = [os.path.join(subfolder, name + '_seg_cup_' + str(i) + '_cropped.jpg') for i in range(1, 8)]
+        img_path = os.path.join(subfolder, name + '.jpg')
+        multi_rater_cup_path = [os.path.join(subfolder, name + '_seg_cup_' + str(i) + '.png') for i in range(1, 8)]
 
         # raw image and raters images
         img = Image.open(img_path).convert('RGB')
@@ -82,4 +82,18 @@ class REFUGE(Dataset):
             'mask_ori': selected_rater_mask_cup_ori,
             'image_meta_dict':image_meta_dict,
         }
+        
+class MBHSeg(Dataset):
+    def __init__(self, args, data_path , transform = None, transform_msk = None, mode = 'Training',prompt = 'click', plane = False):
+        self.data_path = data_path
+        self.subfolders = [f.path for f in os.scandir(os.path.join(data_path, mode + '-400')) if f.is_dir()]
+        # if mode == 'Training':
+        #     self.subfolders += [f.path for f in os.scandir(os.path.join(data_path, 'Validation' + '-400')) if f.is_dir()]
+        self.mode = mode
+        self.prompt = prompt
+        self.img_size = args.image_size
+        self.mask_size = args.out_size
+
+        self.transform = transform
+        self.transform_msk = transform_msk
     
