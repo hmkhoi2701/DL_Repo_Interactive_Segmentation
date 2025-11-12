@@ -76,6 +76,14 @@ if args.dataset == 'REFUGE':
     nice_train_loader = DataLoader(refuge_train_dataset, batch_size=args.b, shuffle=True, pin_memory=True)
     nice_test_loader = DataLoader(refuge_test_dataset, batch_size=args.b, shuffle=False, pin_memory=True)
     '''end'''
+elif args.dataset == 'LIDC':
+    '''LIDC data'''
+    lidc_train_dataset = LIDC(args, args.data_path, transform = transform_train, mode = 'train')
+    lidc_test_dataset = LIDC(args, args.data_path, transform = transform_test, mode = 'test')
+
+    nice_train_loader = DataLoader(lidc_train_dataset, batch_size=args.b, shuffle=True, pin_memory=True)
+    nice_test_loader = DataLoader(lidc_test_dataset, batch_size=args.b, shuffle=False, pin_memory=True)
+    '''end'''
 
 '''checkpoint path and tensorboard'''
 checkpoint_path = os.path.join(settings.CHECKPOINT_PATH, args.net, settings.TIME_NOW)

@@ -37,8 +37,58 @@ Python Version: 3.12.4
  
  [SAM checkpoint](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth)
 
-**Step2:** Download REFUGE2 (update later) or your own multi-rater dataset and put in the ``data`` folder, create the folder if it does not exist ⚒️
- 
+**Step2:** Download datasets to `data` folder:
+- [MBHSeg](https://www.mbhseg.com/)
+- LIDC-IDRI from GCS commands in the [notebook](https://colab.research.google.com/github/deepmind/deepmind-research/blob/master/hierarchical_probabilistic_unet/HPU_Net.ipynb#scrollTo=SY_lyR2BHRu9)
+- [REFUGE](https://huggingface.co/datasets/realslimman/REFUGE-MultiRater/tree/main)
+
+Then run `process_mbh.py` to process MBHSeg dataset. The final structure should look like this
+```
+data/
+├── LIDC/
+│   ├── train/
+│   │   ├── gt/
+│   │   │   ├──LIDC-IDRI-0001/
+│   │   │   │   ├──z-105.0_c0_l0.png
+│   │   │   │   ├──z-105.0_c0_l1.png
+│   │   │   │   └──...
+│   │   │   └── ...
+│   │   └── images/
+│   │       ├──LIDC-IDRI-0001/
+│   │       │   ├──z-105.0_c0.png
+│   │       │   └──...
+│   │       └── ...
+│   └── test/...
+│
+├── MBHSeg-Binary/
+│   ├── train/
+│   │   ├── gt/
+│   │   │   ├──ID_0b10cbee_ID_f91d6a7cd2/
+│   │   │   │   ├──slice_6_r1.npy
+│   │   │   │   ├──slice_6_r3.npy
+│   │   │   │   └──...
+│   │   └── images/
+│   │       ├──ID_0b10cbee_ID_f91d6a7cd2/
+│   │       │   ├──slice_6.png
+│   │       │   └──...
+│   │       └── ...
+│   └── test/...
+├── MBHSeg-Multi/...
+│
+└── REFUGE-Multirater/
+    ├── Training-400/
+    │   ├── 0826/
+    │   │   ├── 0826.jpg
+    │   │   ├── 0826_seg_cup_1.png
+    │   │   ├── 0826_seg_cup_2.png
+    │   │   └──...       
+    │   └── ...
+    └── Test-400/...
+ ```
+
+ Or alternatively, simply download from our huggingface [dataset](https://huggingface.co/datasets/bampyeonji/multiraters/tree/main) and unzip.
+
+
 **Step3:** Run the training by:
  ``python train.py -net sam -mod sam -exp_name 'REFUGE_SPA' -sam_ckpt ./checkpoint/sam/medsam_vit_b.pth -image_size 512 -out_size 256 -b 4 -val_freq 1 -dataset REFUGE -data_path './data/REFUGE'``
 

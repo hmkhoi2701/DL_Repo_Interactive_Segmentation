@@ -451,11 +451,11 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, runs=6, selected_rat
                     
                     
                     '''vis images'''
-                    if ind % args.vis == 0:
-                        namecat = 'Test'
-                        for na in name:
-                            namecat = namecat + na + '+' #.split('/')[-1].split('.')[0] + '+'
-                        vis_image(imgs,output,masks.clone(), os.path.join(args.path_helper['sample_path'], namecat+'epoch+' +str(epoch) + '+iteration+'+str(run+1)+ '.jpg'), reverse=False, points=None)
+                    # if ind % args.vis == 0:
+                    #     namecat = 'Test' + str(ind)
+                    #     # for na in name:
+                    #     #     namecat = namecat + na + '+' #.split('/')[-1].split('.')[0] + '+'
+                    #     vis_image(imgs,output,masks.clone(), os.path.join(args.path_helper['sample_path'], namecat+'epoch+' +str(epoch) + '+iteration+'+str(run+1)+ '.jpg'), reverse=False, points=None)
 
 
 
@@ -482,10 +482,10 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, runs=6, selected_rat
                         plot_image = (plot_image> 0.5).float()
 
                         '''vis images'''
-                        if ind % args.vis == 0:
-                            namecat = 'Test'
-                            for na in name:
-                                namecat = namecat + na + '+' #.split('/')[-1].split('.')[0] + '+'
+                        # if ind % args.vis == 0:
+                        #     namecat = 'Test'
+                        #     for na in name:
+                        #         namecat = namecat + na + '+' #.split('/')[-1].split('.')[0] + '+'
                             #vis_image(imgs,plot_image,masks.clone(), os.path.join(args.path_helper['sample_path'], namecat+'epoch+' +str(epoch) + '+iteration+'+str(run+1)+ '+cluster'+ str(cluster)+'.jpg'), reverse=False, points=None)
 
 

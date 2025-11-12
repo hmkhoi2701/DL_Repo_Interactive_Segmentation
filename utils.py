@@ -55,42 +55,14 @@ import cfg
 import pandas as pd
 
 
-args = cfg.parse_args()
-device = torch.device('cuda', args.gpu_device)
+# args = cfg.parse_args()
+# device = torch.device('cuda', args.gpu_device)
 
 
 def get_network(args, net, use_gpu=True, gpu_device = 0, distribution = True):
-    """ return given network
-    """
-
-    if net == 'sam':
-        from models.sam import SamPredictor, sam_model_registry
-        from models.sam.utils.transforms import ResizeLongestSide
-        options = ['default','vit_b','vit_l','vit_h']
-        if args.encoder not in options:
-            raise ValueError("Invalid encoder option. Please choose from: {}".format(options))
-        else:
-            net = sam_model_registry[args.encoder](args,checkpoint=args.sam_ckpt).to(device)
-
-    elif net == 'efficient_sam':
-        from models.efficient_sam import sam_model_registry
-        options = ['default','vit_s','vit_t']
-        if args.encoder not in options:
-            raise ValueError("Invalid encoder option. Please choose from: {}".format(options))
-        else:
-            net = sam_model_registry[args.encoder](args)
-
-    elif net == 'mobile_sam':
-        from models.MobileSAMv2.mobilesamv2 import sam_model_registry
-        options = ['default','vit_h','vit_l','vit_b','tiny_vit','efficientvit_l2','PromptGuidedDecoder','sam_vit_h']
-        if args.encoder not in options:
-            raise ValueError("Invalid encoder option. Please choose from: {}".format(options))
-        else:
-            net = sam_model_registry[args.encoder](args,checkpoint=args.sam_ckpt)
-
-    else:
-        print('the network name you have entered is not supported yet')
-        sys.exit()
+    from models.sam import SamPredictor, sam_model_registry
+    from models.sam.utils.transforms import ResizeLongestSide
+    net = sam_model_registry['default'](args,checkpoint=args.sam_ckpt).to(device)
 
     if use_gpu:
         #net = net.cuda(device = gpu_device)
@@ -101,31 +73,6 @@ def get_network(args, net, use_gpu=True, gpu_device = 0, distribution = True):
             net = net.to(device=gpu_device)
 
     return net
-
-
-    data_dir = args.data_path
-    split_JSON = "dataset_0.json"
-
-    datasets = os.path.join(data_dir, split_JSON)
-    datalist = load_decathlon_datalist(datasets, True, "training")
-    val_files = load_decathlon_datalist(datasets, True, "validation")
-    train_ds = CacheDataset(
-        data=datalist,
-        transform=train_transforms,
-        cache_num=24,
-        cache_rate=1.0,
-        num_workers=8,
-    )
-    train_loader = ThreadDataLoader(train_ds, num_workers=0, batch_size=args.b, shuffle=True)
-    val_ds = CacheDataset(
-        data=val_files, transform=val_transforms, cache_num=2, cache_rate=1.0, num_workers=0
-    )
-    val_loader = ThreadDataLoader(val_ds, num_workers=0, batch_size=1)
-
-    set_track_meta(False)
-
-    return train_loader, val_loader, train_transforms, val_transforms, datalist, val_files
-
 
 @torch.no_grad()
 def make_grid(
@@ -473,9 +420,9 @@ def random_click(multi_rater, mask_size):
 
     multi_rater_mean = np.mean(np.array(multi_rater.squeeze(1)), axis=0)
 
-    # with larger prob to choose divergent area, so subset of multi-rater, ow all agreement
+    # with prob = 0.8 to choose divergent area, so subset of multi-rater, ow all agreement
     point_label = random.choice(list(set(multi_rater_mean.flatten())))
-    if np.random.choice([True, False], 1, p=[0.8,0.2])[0] == True:
+    if np.random.choice([True, False], 1, p=[0.8,0.2])[0]:
         while (point_label == 0) or (point_label == 1):
             point_label = random.choice(list(set(multi_rater_mean.flatten())))
         
@@ -485,7 +432,7 @@ def random_click(multi_rater, mask_size):
     
     # decide the label of the selected position, higher prob to be more rater agreement
     if (point_label != 0) and (point_label != 1):
-        if np.random.choice([True, False], 1, p=[0.8,0.2])[0] == True:
+        if np.random.choice([True, False], 1, p=[0.8,0.2])[0]:
             point_label = round(point_label)
         else:
             point_label = 1 - round(point_label)
