@@ -1,11 +1,5 @@
 <h1 align="center">● SPA: Efficient User-Preference Alignment against Uncertainty in Medical Image Segmentation</h1>
 
-<p align="center">
-    <a href="https://discord.gg/DN4rvk95CC">
-        <img alt="Discord" src="https://img.shields.io/discord/1146610656779440188?logo=discord&style=flat&logoColor=white"/></a>
-    <img src="https://img.shields.io/static/v1?label=license&message=GPL&color=white&style=flat" alt="License"/>
-</p>
-
 SPA, is an advanced segmentation framework that efficiently adapts to diverse test-time preferences with minimal human interaction. By presenting users a select few, distinct segmentation candidates that best capture uncertainties, it reduces clinician workload in reaching the preferred segmentation. This method is elaborated on the paper:
 
 [SPA: Efficient User-Preference Alignment against Uncertainty in Medical Image Segmentation](https://arxiv.org/abs/2411.15513) (ICCV 2025)
@@ -20,9 +14,11 @@ Our uncertainty-aware interactive segmentation model, <b>SPA</b>, efficiently ac
 
  Install the environment:
 
- ``conda env create -f environment.yml``
+ ``conda create -n seg_environment python=3.10``
 
- ``conda activate SPA``
+ ``conda activate seg_environment``
+
+ ``pip install -r requirements.txt``
 
  Further Note: We tested on the following system environment and you may have to handle some issue due to system difference.
 ```
@@ -32,14 +28,13 @@ Python Version: 3.12.4
 ```
 
 ## 🎯 Example Cases
-**Step1:** Download MedSAM or SAM pretrained weight and put in the ``./checkpoint/sam/`` folder, create the folder if it does not exist ⚒️
- [MedSAM checkpoint](https://drive.google.com/drive/folders/1ETWmi4AiniJeWOt6HAsYgTjYv_fkgzoN?usp=drive_link)
+**Step1:** Download MedSAM pretrained weight and put in the ``./checkpoint/`` folder, create the folder if it does not exist ⚒️
+ [MedSAM checkpoint](https://drive.google.com/drive/folders/1ETWmi4AiniJeWOt6HAsYgTjYv_fkgzoN?usp=drive_link) -> Select `medsam_vit_b.pth` file.
  
- [SAM checkpoint](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth)
 
 **Step2:** Download datasets to `data` folder:
 - [MBHSeg](https://www.mbhseg.com/)
-- LIDC-IDRI from GCS commands in the [notebook](https://colab.research.google.com/github/deepmind/deepmind-research/blob/master/hierarchical_probabilistic_unet/HPU_Net.ipynb#scrollTo=SY_lyR2BHRu9)
+- LIDC-IDRI from GCS commands in [this notebook](https://colab.research.google.com/github/deepmind/deepmind-research/blob/master/hierarchical_probabilistic_unet/HPU_Net.ipynb#scrollTo=SY_lyR2BHRu9)
 - [REFUGE](https://huggingface.co/datasets/realslimman/REFUGE-MultiRater/tree/main)
 
 Then run `process_mbh.py` to process MBHSeg dataset. The final structure should look like this
@@ -90,10 +85,12 @@ data/
 
 
 **Step3:** Run the training by:
- ``python train.py -net sam -mod sam -exp_name 'REFUGE_SPA' -sam_ckpt ./checkpoint/sam/medsam_vit_b.pth -image_size 512 -out_size 256 -b 4 -val_freq 1 -dataset REFUGE -data_path './data/REFUGE'``
+ <!-- ``python train.py -net sam -mod sam -exp_name 'REFUGE_SPA' -sam_ckpt ./checkpoint/medsam_vit_b.pth -image_size 512 -out_size 256 -b 4 -val_freq 1 -dataset REFUGE -data_path './data/REFUGE'`` -->
 
-**Step4:** Run the validation by:
- ``python val.py -net sam -mod sam -exp_name 'val' -vis 1 -sam_ckpt CHECKPOINT_PATH -weights CHECKPOINT_PATH -image_size 512 -out_size 256 -b 1 -val_freq 1 -dataset REFUGE -data_path './data/REFUGE'``
+``python train.py -exp_name 'LIDC_SPA' -sam_ckpt ./checkpoint/medsam_vit_b.pth -image_size 128 -out_size 128 -b 16 -val_freq 1 -dataset LIDC -data_path './data/LIDC'``
+
+<!-- **Step4:** Run the validation by:
+ ``python val.py -net sam -mod sam -exp_name 'val' -vis 1 -sam_ckpt CHECKPOINT_PATH -weights CHECKPOINT_PATH -image_size 512 -out_size 256 -b 1 -val_freq 1 -dataset REFUGE -data_path './data/REFUGE'`` -->
 
 ## 🚨 News
 - 25-06-26. SPA is accepted by ICCV 🥳

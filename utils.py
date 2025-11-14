@@ -55,8 +55,8 @@ import cfg
 import pandas as pd
 
 
-# args = cfg.parse_args()
-# device = torch.device('cuda', args.gpu_device)
+args = cfg.parse_args()
+device = torch.device('cuda', args.gpu_device)
 
 
 def get_network(args, net, use_gpu=True, gpu_device = 0, distribution = True):
