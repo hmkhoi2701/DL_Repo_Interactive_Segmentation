@@ -25,9 +25,9 @@ from models.sam.modeling import EMWeights, EMMeanVariance
 args = cfg.parse_args()
 
 GPUdevice = torch.device('cuda', args.gpu_device)
-net = get_network(args, args.net, use_gpu=args.gpu, gpu_device=GPUdevice, distribution = args.distributed)
-net.EM_weights = EMWeights(n_components=16).to(GPUdevice)
-net.EM_mean_variance = EMMeanVariance(se_dim = 256, pe_dim = 256, n_components=16).to(GPUdevice)
+net = get_network(args, use_gpu=args.gpu, gpu_device=GPUdevice, distribution = args.distributed)
+net.EM_weights = EMWeights(n_components=args.n_components).to(GPUdevice)
+net.EM_mean_variance = EMMeanVariance(se_dim = 256, pe_dim = 256, n_components=args.n_components).to(GPUdevice)
 
 '''load pretrained model'''
 assert args.weights != 0

@@ -3,11 +3,11 @@ import argparse
 
 def parse_args():    
     parser = argparse.ArgumentParser()
-    parser.add_argument('-net', type=str, default='sam', help='net type')
-    parser.add_argument('-baseline', type=str, default='unet', help='baseline net type')
+    parser.add_argument('-num_samples', type=int, default=48, help='number of samples for each image')
+    parser.add_argument('-n_clusters', type=int, default=4, help='number of clusters for em')
+    parser.add_argument('-n_components', type=int, default=16, help='number of components for em')
     parser.add_argument('-encoder', type=str, default='default', help='encoder type')
     parser.add_argument('-seg_net', type=str, default='transunet', help='net type')
-    parser.add_argument('-mod', type=str, default='sam_adpt', help='mod type:seg,cls,val_ad')
     parser.add_argument('-exp_name', default='msa_test_isic', type=str, help='net type')
     parser.add_argument('-type', type=str, default='map', help='condition type:ave,rand,rand_map')
     parser.add_argument('-vis', type=int, default=None, help='visualization')
@@ -50,10 +50,6 @@ def parse_args():
     type=str,
     default='../data',
     help='The path of segmentation data')
-    # '../dataset/RIGA/DiscRegion'
-    # '../dataset/ISIC'
     opt = parser.parse_args()
 
     return opt
-
-# required=True, 

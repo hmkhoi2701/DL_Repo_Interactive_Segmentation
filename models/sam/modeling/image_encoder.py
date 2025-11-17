@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from einops import rearrange
 
 from ...common import LayerNorm2d
-from ...ImageEncoder import AdapterBlock, Block, LoraBlock
+from .vit_block import Block
 from .sample_generator import Fcomb
 
 
@@ -77,12 +77,7 @@ class ImageEncoderViT(nn.Module):
             )
 
         self.blocks = nn.ModuleList()
-        if args.mod == 'sam_adpt':
-            block_class = AdapterBlock 
-        elif args.mod == 'sam_lora':
-            block_class = LoraBlock 
-        else:
-            block_class = Block 
+        block_class = Block 
 
         for i in range(depth):
             block = block_class(

@@ -30,8 +30,8 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
     epoch_loss = 0
     ind = 0
     
-    num_sample = 48
-    n_clusters = 4
+    num_sample = args.num_samples
+    n_clusters = args.n_clusters
 
     # train mode
     net.train()
@@ -323,9 +323,8 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, runs=6, selected_rat
     GPUdevice = torch.device('cuda:' + str(args.gpu_device))
     device = GPUdevice
 
-    
-    num_sample = 48
-    n_clusters = 4
+    num_sample = args.num_samples
+    n_clusters = args.n_clusters
 
     total_loss_list = np.zeros(runs)
     total_eiou_list = np.zeros(runs)

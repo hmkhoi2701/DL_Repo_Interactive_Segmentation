@@ -21,7 +21,6 @@ from torch.utils.data import DataLoader
 import cfg
 import function
 from conf import settings
-#from models.discriminatorlayer import discriminator
 from dataset import *
 from utils import *
 from models.sam.modeling import EMWeights, EMMeanVariance
@@ -30,13 +29,13 @@ args = cfg.parse_args()
 
 GPUdevice = torch.device('cuda', args.gpu_device)
 
-net = get_network(args, args.net, use_gpu=args.gpu, gpu_device=GPUdevice, distribution = args.distributed)
+net = get_network(args, use_gpu=args.gpu, gpu_device=GPUdevice, distribution = args.distributed)
 if args.pretrain:
     weights = torch.load(args.pretrain)
     net.load_state_dict(weights,strict=False)
 
-net.EM_weights = EMWeights(n_components=16).to(GPUdevice)
-net.EM_mean_variance = EMMeanVariance(se_dim = 256, pe_dim = 256, n_components=16).to(GPUdevice)
+net.EM_weights = EMWeights(n_components=args.n_components).to(GPUdevice)
+net.EM_mean_variance = EMMeanVariance(se_dim = 256, pe_dim = 256, n_components=args.n_components).to(GPUdevice)
 
 optimizer = optim.Adam(net.parameters(), lr=args.lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False) 
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5) 
@@ -84,14 +83,22 @@ elif args.dataset == 'LIDC':
     nice_train_loader = DataLoader(lidc_train_dataset, batch_size=args.b, shuffle=True, pin_memory=True)
     nice_test_loader = DataLoader(lidc_test_dataset, batch_size=args.b, shuffle=False, pin_memory=True)
     '''end'''
+elif args.dataset == 'MBHSeg-Binary':
+    '''MBHSeg-Binary data'''
+    mbhseg_binary_train_dataset = MBHSeg_Binary(args, args.data_path, transform = transform_train, mode = 'train')
+    mbhseg_binary_test_dataset = MBHSeg_Binary(args, args.data_path, transform = transform_test, mode = 'test')
+
+    nice_train_loader = DataLoader(mbhseg_binary_train_dataset, batch_size=args.b, shuffle=True, pin_memory=True)
+    nice_test_loader = DataLoader(mbhseg_binary_test_dataset, batch_size=args.b, shuffle=False, pin_memory=True)
+    '''end'''
 
 '''checkpoint path and tensorboard'''
-checkpoint_path = os.path.join(settings.CHECKPOINT_PATH, args.net, settings.TIME_NOW)
+checkpoint_path = os.path.join(settings.CHECKPOINT_PATH, f'{args.dataset}_{args.num_samples}_{args.n_clusters}_{args.n_components}_{settings.TIME_NOW}')
 #use tensorboard
 if not os.path.exists(settings.LOG_DIR):
     os.mkdir(settings.LOG_DIR)
 writer = SummaryWriter(log_dir=os.path.join(
-        settings.LOG_DIR, args.net, settings.TIME_NOW))
+        settings.LOG_DIR, f'{args.dataset}_{args.num_samples}_{args.n_clusters}_{args.n_components}_{settings.TIME_NOW}'))
 
 #create checkpoint folder to save model
 if not os.path.exists(checkpoint_path):
@@ -125,7 +132,7 @@ for epoch in range(settings.EPOCH):
 
             save_checkpoint({
             'epoch': epoch + 1,
-            'model': args.net,
+            'model': 'sam',
             'state_dict': net.state_dict(),
             'optimizer': optimizer.state_dict(),
             'path_helper': args.path_helper,

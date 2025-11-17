@@ -59,7 +59,7 @@ args = cfg.parse_args()
 device = torch.device('cuda', args.gpu_device)
 
 
-def get_network(args, net, use_gpu=True, gpu_device = 0, distribution = True):
+def get_network(args, use_gpu=True, gpu_device = 0, distribution = True):
     from models.sam import SamPredictor, sam_model_registry
     from models.sam.utils.transforms import ResizeLongestSide
     net = sam_model_registry['default'](args,checkpoint=args.sam_ckpt).to(device)
@@ -421,10 +421,12 @@ def random_click(multi_rater, mask_size):
     multi_rater_mean = np.mean(np.array(multi_rater.squeeze(1)), axis=0)
 
     # with prob = 0.8 to choose divergent area, so subset of multi-rater, ow all agreement
-    point_label = random.choice(list(set(multi_rater_mean.flatten())))
+    list_set = list(set(multi_rater_mean.flatten()))
+    point_label = random.choice(list_set)
     if np.random.choice([True, False], 1, p=[0.8,0.2])[0]:
-        while (point_label == 0) or (point_label == 1):
-            point_label = random.choice(list(set(multi_rater_mean.flatten())))
+        divergent_values = [v for v in list_set if v != 0 and v != 1]
+        if len(divergent_values) > 0:
+            point_label = random.choice(divergent_values)
         
     # randomly select a position among these indices
     indices = np.argwhere(multi_rater_mean == point_label)

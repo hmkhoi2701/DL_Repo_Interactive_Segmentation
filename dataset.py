@@ -82,7 +82,7 @@ class REFUGE(Dataset):
 class MBHSeg_Binary(Dataset):
     def __init__(self, args, data_path , transform = None, transform_msk = None, mode = 'train',prompt = 'click', plane = False):
         self.data_path = data_path
-
+        self.max_raters = 4
         
         gt_folder = os.path.join(data_path, mode, 'gt')
         img_folder = os.path.join(data_path, mode, 'imgs')
@@ -101,7 +101,8 @@ class MBHSeg_Binary(Dataset):
             for f in os.listdir(folder):
                 prefix = f[:-4]
                 self.img_paths.append(os.path.join(folder, f))
-                self.gt_paths.append([os.path.join(gt_folder, folder.split('/')[-1], prefix + '_l'+str(i)+'.png') for i in range(0, 3)])
+                self.gt_paths.append([os.path.join(gt_folder, folder.split('/')[-1], prefix + '_r'+str(i)+'.npy') for i in range(1, 5) 
+                         if os.path.exists(os.path.join(gt_folder, folder.split('/')[-1], prefix + '_r'+str(i)+'.npy'))])
         
         self.mode = mode
         self.prompt = prompt
@@ -110,6 +111,64 @@ class MBHSeg_Binary(Dataset):
 
         self.transform = transform
         self.transform_msk = transform_msk
+        
+    def __len__(self):
+        return len(self.img_paths)
+    
+    def __getitem__(self, index):
+        
+        """Get the images"""
+        img_path = self.img_paths[index]
+        gt_paths = self.gt_paths[index]
+        
+        img = Image.open(img_path).convert('RGB')
+        multi_rater = [Image.fromarray(np.load(path)).convert('L') for path in gt_paths]
+        
+        if self.transform:
+            state = torch.get_rng_state()
+            img = self.transform(img)
+            multi_rater_cup = [torch.as_tensor((self.transform(single_rater) >=0.5).float(), dtype=torch.float32) for single_rater in multi_rater]
+            multi_rater_cup = torch.stack(multi_rater_cup, dim=0)
+
+            torch.set_rng_state(state)
+
+        if self.prompt == 'click':
+            point_label_cup, pt_cup, selected_rater_cup, not_selected_rater_cup, selected_rater_mask_cup, selected_rater_mask_cup_ori = random_click(multi_rater_cup, self.mask_size)    
+        
+        def _torch_pad_first_dim(x, target_n):
+            n = x.shape[0]
+            if n == target_n:
+                return x
+            pad = torch.zeros((target_n - n, *x.shape[1:]), dtype=x.dtype)
+            x = torch.cat([x, pad], dim=0)
+            return x
+        
+        def _arr_pad_first_dim(x, target_n, val = 1.):
+            # x: 1xn array
+            n = x.shape[0]
+            if n == target_n:
+                return x
+            pad = np.ones((target_n - n), dtype=x.dtype) * val
+            x = np.concatenate([x, pad], axis=0)
+            return x
+        
+        multi_rater_cup = _torch_pad_first_dim(multi_rater_cup, self.max_raters)
+        
+        selected_rater_cup = _arr_pad_first_dim(selected_rater_cup, self.max_raters, val = 0.)
+        not_selected_rater_cup = _arr_pad_first_dim(not_selected_rater_cup, self.max_raters)
+        
+        image_meta_dict = {'filename_or_obj':img_path.split('/')[-1]}
+        return {
+            'image':img,
+            'multi_rater': multi_rater_cup, 
+            'p_label': point_label_cup,
+            'pt':pt_cup, 
+            'selected_rater': selected_rater_cup, 
+            'not_selected_rater': not_selected_rater_cup, 
+            'mask': selected_rater_mask_cup, 
+            'mask_ori': selected_rater_mask_cup_ori,
+            'image_meta_dict':image_meta_dict,
+        }
     
 class LIDC(Dataset):
     def __init__(self, args, data_path , transform = None, transform_msk = None, mode = 'train', prompt = 'click', plane = False):

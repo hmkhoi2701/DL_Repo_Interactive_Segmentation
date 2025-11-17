@@ -20,13 +20,6 @@ Our uncertainty-aware interactive segmentation model, <b>SPA</b>, efficiently ac
 
  ``pip install -r requirements.txt``
 
- Further Note: We tested on the following system environment and you may have to handle some issue due to system difference.
-```
-Operating System: Ubuntu 22.04
-Conda Version: 23.7.4
-Python Version: 3.12.4
-```
-
 ## 🎯 Example Cases
 **Step1:** Download MedSAM pretrained weight and put in the ``./checkpoint/`` folder, create the folder if it does not exist ⚒️
  [MedSAM checkpoint](https://drive.google.com/drive/folders/1ETWmi4AiniJeWOt6HAsYgTjYv_fkgzoN?usp=drive_link) -> Select `medsam_vit_b.pth` file.
@@ -87,17 +80,16 @@ data/
 **Step3:** Run the training by:
  <!-- ``python train.py -net sam -mod sam -exp_name 'REFUGE_SPA' -sam_ckpt ./checkpoint/medsam_vit_b.pth -image_size 512 -out_size 256 -b 4 -val_freq 1 -dataset REFUGE -data_path './data/REFUGE'`` -->
 
-``python train.py -exp_name 'LIDC_SPA' -sam_ckpt ./checkpoint/medsam_vit_b.pth -image_size 128 -out_size 128 -b 16 -val_freq 1 -dataset LIDC -data_path './data/LIDC'``
+``python train.py -exp_name 'LIDC_SPA' -sam_ckpt ./checkpoint/medsam_vit_b.pth -image_size 128 -out_size 128 -b 16 -dataset LIDC -data_path './data/LIDC' -num_samples 48 -n_clusters 4 -n_components 16``
+
+``python train.py -exp_name 'MBHSeg_Binary_SPA' -sam_ckpt ./checkpoint/medsam_vit_b.pth -image_size 128 -out_size 128 -b 16 -dataset MBHSeg-Binary -data_path './data/MBHSeg-Binary' -num_samples 48 -n_clusters 4 -n_components 16``
+
+Other configs to try are listed in `bash.sh`
 
 <!-- **Step4:** Run the validation by:
  ``python val.py -net sam -mod sam -exp_name 'val' -vis 1 -sam_ckpt CHECKPOINT_PATH -weights CHECKPOINT_PATH -image_size 512 -out_size 256 -b 1 -val_freq 1 -dataset REFUGE -data_path './data/REFUGE'`` -->
 
-## 🚨 News
-- 25-06-26. SPA is accepted by ICCV 🥳
-- 25-01-06. Code Uploaded 👩‍💻
-- 24-12-02. SPA's website is released 🤩
-
-## 📝 Cite
+## Credits
  ~~~
 @misc{zhu_spa_2024,
       title={SPA: Efficient User-Preference Alignment against Uncertainty in Medical Image Segmentation},
