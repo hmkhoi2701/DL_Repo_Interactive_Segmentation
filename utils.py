@@ -421,12 +421,14 @@ def random_click(multi_rater, mask_size):
     multi_rater_mean = np.mean(np.array(multi_rater.squeeze(1)), axis=0)
 
     # with prob = 0.8 to choose divergent area, so subset of multi-rater, ow all agreement
-    list_set = list(set(multi_rater_mean.flatten()))
-    point_label = random.choice(list_set)
+    unique_values = list(set(multi_rater_mean.flatten()))
+    point_label = random.choice(unique_values)
     if np.random.choice([True, False], 1, p=[0.8,0.2])[0]:
-        divergent_values = [v for v in list_set if v != 0 and v != 1]
+        # Only try to find divergent values if they exist
+        divergent_values = [v for v in unique_values if v != 0 and v != 1]
         if len(divergent_values) > 0:
             point_label = random.choice(divergent_values)
+        # If no divergent values exist, keep the original point_label (0 or 1)
         
     # randomly select a position among these indices
     indices = np.argwhere(multi_rater_mean == point_label)

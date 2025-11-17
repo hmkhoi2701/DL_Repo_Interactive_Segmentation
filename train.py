@@ -80,8 +80,9 @@ elif args.dataset == 'LIDC':
     lidc_train_dataset = LIDC(args, args.data_path, transform = transform_train, mode = 'train')
     lidc_test_dataset = LIDC(args, args.data_path, transform = transform_test, mode = 'test')
 
-    nice_train_loader = DataLoader(lidc_train_dataset, batch_size=args.b, shuffle=True, pin_memory=True)
-    nice_test_loader = DataLoader(lidc_test_dataset, batch_size=args.b, shuffle=False, pin_memory=True)
+    # Set num_workers=0 when debugging to avoid hanging with breakpoint()
+    nice_train_loader = DataLoader(lidc_train_dataset, num_workers=args.w, batch_size=args.b, shuffle=True, pin_memory=True)
+    nice_test_loader = DataLoader(lidc_test_dataset, num_workers=args.w, batch_size=args.b, shuffle=False, pin_memory=True)
     '''end'''
 elif args.dataset == 'MBHSeg-Binary':
     '''MBHSeg-Binary data'''
