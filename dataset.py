@@ -16,14 +16,14 @@ from skimage import io
 from skimage.transform import rotate
 from torch.utils.data import Dataset
 
-from utils import random_click
+from utils import random_click, random_click_multiclass
 from itertools import combinations
 import nibabel as nib
 
 
 
 class REFUGE(Dataset):
-    def __init__(self, args, data_path , transform = None, transform_msk = None, mode = 'Training',prompt = 'click', plane = False):
+    def __init__(self, args, data_path , transform = None, mode = 'Training',prompt = 'click', plane = False):
         self.data_path = data_path
         self.subfolders = [f.path for f in os.scandir(os.path.join(data_path, mode + '-400')) if f.is_dir()]
         # if mode == 'Training':
@@ -31,10 +31,9 @@ class REFUGE(Dataset):
         self.mode = mode
         self.prompt = prompt
         self.img_size = args.image_size
-        self.mask_size = args.out_size
 
         self.transform = transform
-        self.transform_msk = transform_msk
+        self.mode = args.mode
 
     def __len__(self):
         return len(self.subfolders)
@@ -61,28 +60,36 @@ class REFUGE(Dataset):
 
             torch.set_rng_state(state)
 
-        if self.prompt == 'click':
-            point_label_cup, pt_cup, selected_rater_cup, not_selected_rater_cup, selected_rater_mask_cup, selected_rater_mask_cup_ori = random_click(multi_rater_cup, self.mask_size)
-            
-
-
-        image_meta_dict = {'filename_or_obj':name}
-        return {
-            'image':img,
-            'multi_rater': multi_rater_cup, 
-            'p_label': point_label_cup,
-            'pt':pt_cup, 
-            'selected_rater': selected_rater_cup, 
-            'not_selected_rater': not_selected_rater_cup, 
-            'mask': selected_rater_mask_cup, 
-            'mask_ori': selected_rater_mask_cup_ori,
-            'image_meta_dict':image_meta_dict,
-        }
+        if self.prompt == 'click' and self.mode == 'SPA':
+            point_label_cup, pt_cup, selected_rater_cup, not_selected_rater_cup, selected_rater_mask_cup = random_click(multi_rater_cup)
+            valid_raters = multi_rater_cup.sum(dim=(1,2,3)) > 0            
+            image_meta_dict = {'filename_or_obj':name}
+            return {
+                'image':img,
+                'multi_rater': multi_rater_cup, 
+                'p_label': point_label_cup,
+                'pt':pt_cup, 
+                'selected_rater': selected_rater_cup, 
+                'not_selected_rater': not_selected_rater_cup, 
+                'mask': selected_rater_mask_cup, 
+                'image_meta_dict':image_meta_dict,
+                'valid_raters': valid_raters,
+            }
+        
+        else:
+            image_meta_dict = {'filename_or_obj':name}
+            valid_raters = multi_rater_cup.sum(dim=(1,2,3)) > 0
+            return {
+                'image':img,
+                'multi_rater': multi_rater_cup, 
+                'image_meta_dict':image_meta_dict,
+                'valid_raters': valid_raters,
+            }
         
 class MBHSeg_Binary(Dataset):
-    def __init__(self, args, data_path , transform = None, transform_msk = None, mode = 'train',prompt = 'click', plane = False):
+    def __init__(self, args, data_path , transform = None, mode = 'train',prompt = 'click', plane = False):
         self.data_path = data_path
-        self.max_raters = 4
+        self.max_raters = 3 if mode == 'test' else 4
         
         gt_folder = os.path.join(data_path, mode, 'gt')
         img_folder = os.path.join(data_path, mode, 'imgs')
@@ -104,13 +111,11 @@ class MBHSeg_Binary(Dataset):
                 self.gt_paths.append([os.path.join(gt_folder, folder.split('/')[-1], prefix + '_r'+str(i)+'.npy') for i in range(1, 5) 
                          if os.path.exists(os.path.join(gt_folder, folder.split('/')[-1], prefix + '_r'+str(i)+'.npy'))])
         
-        self.mode = mode
+        self.mode = args.mode
         self.prompt = prompt
         self.img_size = args.image_size
-        self.mask_size = args.out_size
 
         self.transform = transform
-        self.transform_msk = transform_msk
         
     def __len__(self):
         return len(self.img_paths)
@@ -132,12 +137,15 @@ class MBHSeg_Binary(Dataset):
 
             torch.set_rng_state(state)
 
-        if self.prompt == 'click':
-            point_label_cup, pt_cup, selected_rater_cup, not_selected_rater_cup, selected_rater_mask_cup, selected_rater_mask_cup_ori = random_click(multi_rater_cup, self.mask_size)    
+        if self.prompt == 'click' and self.mode == 'SPA':
+            point_label_cup, pt_cup, selected_rater_cup, not_selected_rater_cup, selected_rater_mask_cup = random_click(multi_rater_cup)    
         
         def _torch_pad_first_dim(x, target_n):
             n = x.shape[0]
             if n == target_n:
+                return x
+            if n> target_n:
+                x = x[:target_n]
                 return x
             pad = torch.zeros((target_n - n, *x.shape[1:]), dtype=x.dtype)
             x = torch.cat([x, pad], dim=0)
@@ -148,30 +156,157 @@ class MBHSeg_Binary(Dataset):
             n = x.shape[0]
             if n == target_n:
                 return x
+            if n> target_n:
+                x = x[:target_n]
+                return x
             pad = np.ones((target_n - n), dtype=x.dtype) * val
             x = np.concatenate([x, pad], axis=0)
             return x
         
         multi_rater_cup = _torch_pad_first_dim(multi_rater_cup, self.max_raters)
         
-        selected_rater_cup = _arr_pad_first_dim(selected_rater_cup, self.max_raters, val = 0.)
-        not_selected_rater_cup = _arr_pad_first_dim(not_selected_rater_cup, self.max_raters)
+        if self.prompt == 'click' and self.mode == 'SPA':
+            selected_rater_cup = _arr_pad_first_dim(selected_rater_cup, self.max_raters, val = 0.)
+            not_selected_rater_cup = _arr_pad_first_dim(not_selected_rater_cup, self.max_raters)
+            valid_raters = multi_rater_cup.sum(dim=(1,2,3)) > 0
         
-        image_meta_dict = {'filename_or_obj':img_path.split('/')[-1]}
-        return {
-            'image':img,
-            'multi_rater': multi_rater_cup, 
-            'p_label': point_label_cup,
-            'pt':pt_cup, 
-            'selected_rater': selected_rater_cup, 
-            'not_selected_rater': not_selected_rater_cup, 
-            'mask': selected_rater_mask_cup, 
-            'mask_ori': selected_rater_mask_cup_ori,
-            'image_meta_dict':image_meta_dict,
-        }
+            image_meta_dict = {'filename_or_obj':img_path.split('/')[-1]}
+            return {
+                'image':img,
+                'multi_rater': multi_rater_cup, 
+                'p_label': point_label_cup,
+                'pt':pt_cup, 
+                'selected_rater': selected_rater_cup, 
+                'not_selected_rater': not_selected_rater_cup, 
+                'mask': selected_rater_mask_cup, 
+                'image_meta_dict':image_meta_dict,
+                'valid_raters': valid_raters,
+            }
+        
+        else:
+            image_meta_dict = {'filename_or_obj':img_path.split('/')[-1]}
+            valid_raters = multi_rater_cup.sum(dim=(1,2,3)) > 0
+            return {
+                'image':img,
+                'multi_rater': multi_rater_cup, 
+                'image_meta_dict':image_meta_dict,
+                'valid_raters': valid_raters,
+            }
+            
+class MBHSeg_Multiclass(Dataset):
+    def __init__(self, args, data_path , transform = None, mode = 'train',prompt = 'click', plane = False):
+        self.data_path = data_path
+        self.max_raters = 3 if mode == 'test' else 4
+        
+        gt_folder = os.path.join(data_path, mode, 'gt')
+        img_folder = os.path.join(data_path, mode, 'imgs')
+        
+        gt_subfolders = []
+        img_subfolders = []
+        for f in os.scandir(gt_folder):
+            if not f.is_dir():
+                continue
+            gt_subfolders.append(os.path.join(gt_folder, f.name))
+            img_subfolders.append(os.path.join(img_folder, f.name))
+            
+        self.img_paths = []
+        self.gt_paths = []
+        for folder in img_subfolders:
+            for f in os.listdir(folder):
+                prefix = f[:-4]
+                self.img_paths.append(os.path.join(folder, f))
+                self.gt_paths.append([os.path.join(gt_folder, folder.split('/')[-1], prefix + '_r'+str(i)+'.npy') for i in range(1, 5) 
+                         if os.path.exists(os.path.join(gt_folder, folder.split('/')[-1], prefix + '_r'+str(i)+'.npy'))])
+        
+        self.mode = args.mode
+        self.prompt = prompt
+        self.img_size = args.image_size
+
+        self.transform = transform
+        
+    def __len__(self):
+        return len(self.img_paths)
+    
+    def __getitem__(self, index):
+        
+        """Get the images"""
+        img_path = self.img_paths[index]
+        gt_paths = self.gt_paths[index]
+        
+        img = Image.open(img_path).convert('RGB')
+        multi_rater = []
+        for path in gt_paths:
+            arr = np.load(path)
+            m = torch.from_numpy(arr).permute(2, 0, 1).float()
+            multi_rater.append(m)
+            
+        if self.transform:
+            state = torch.get_rng_state()
+            img = self.transform(img)
+            H, W = img.shape[-2], img.shape[-1]
+
+            multi_rater = [transforms.functional.resize(m, (H, W), interpolation=transforms.InterpolationMode.NEAREST) for m in multi_rater]
+            multi_rater = [(m > 0.5).float() for m in multi_rater]
+            multi_rater_cup = torch.stack(multi_rater, dim=0)
+            
+        if self.prompt == 'click' and self.mode == 'SPA':
+            point_label_cup, pt_cup, selected_rater_cup, not_selected_rater_cup, selected_rater_mask_cup = random_click_multiclass(multi_rater_cup)
+            
+        def _torch_pad_first_dim(x, target_n):
+            n = x.shape[0]
+            if n == target_n:
+                return x
+            if n> target_n:
+                x = x[:target_n]
+                return x
+            pad = torch.zeros((target_n - n, *x.shape[1:]), dtype=x.dtype)
+            x = torch.cat([x, pad], dim=0)
+            return x
+        
+        def _arr_pad_first_dim(x, target_n, val = 1.):
+            # x: 1xn array
+            n = x.shape[0]
+            if n == target_n:
+                return x
+            if n> target_n:
+                x = x[:target_n]
+                return x
+            pad = np.ones((target_n - n), dtype=x.dtype) * val
+            x = np.concatenate([x, pad], axis=0)
+            return x
+        
+        multi_rater_cup = _torch_pad_first_dim(multi_rater_cup, self.max_raters)
+        
+        if self.prompt == 'click' and self.mode == 'SPA':
+            selected_rater_cup = _arr_pad_first_dim(selected_rater_cup, self.max_raters, val = 0.)
+            not_selected_rater_cup = _arr_pad_first_dim(not_selected_rater_cup, self.max_raters)
+            valid_raters = multi_rater_cup.sum(dim=(1,2,3)) > 0
+        
+            image_meta_dict = {'filename_or_obj':img_path.split('/')[-1]}
+            return {
+                'image':img,
+                'multi_rater': multi_rater_cup, 
+                'p_label': point_label_cup,
+                'pt':pt_cup, 
+                'selected_rater': selected_rater_cup, 
+                'not_selected_rater': not_selected_rater_cup, 
+                'mask': selected_rater_mask_cup, 
+                'image_meta_dict':image_meta_dict,
+                'valid_raters': valid_raters,
+            }
+        else:
+            image_meta_dict = {'filename_or_obj':img_path.split('/')[-1]}
+            valid_raters = multi_rater_cup.sum(dim=(1,2,3)) > 0
+            return {
+                'image':img,
+                'multi_rater': multi_rater_cup, 
+                'valid_raters': valid_raters,
+                'image_meta_dict':image_meta_dict,
+            }
+        
     
 class LIDC(Dataset):
-    def __init__(self, args, data_path , transform = None, transform_msk = None, mode = 'train', prompt = 'click', plane = False):
+    def __init__(self, args, data_path , transform = None, mode = 'train', prompt = 'click', plane = False):
         self.data_path = data_path
         
         gt_folder = os.path.join(data_path, mode, 'gt')
@@ -198,13 +333,11 @@ class LIDC(Dataset):
         self.img_paths = [self.img_paths[i] for i in non_empty_indices]
         self.gt_paths = [self.gt_paths[i] for i in non_empty_indices]
                 
-        self.mode = mode
+        self.mode = args.mode
         self.prompt = prompt
         self.img_size = args.image_size
-        self.mask_size = args.out_size
 
         self.transform = transform
-        self.transform_msk = transform_msk
     
     def __len__(self):
         return len(self.img_paths)
@@ -226,20 +359,29 @@ class LIDC(Dataset):
 
             torch.set_rng_state(state)
 
-        if self.prompt == 'click':
-            point_label_cup, pt_cup, selected_rater_cup, not_selected_rater_cup, selected_rater_mask_cup, selected_rater_mask_cup_ori = random_click(multi_rater_cup, self.mask_size)
-            
+        if self.prompt == 'click' and self.mode == 'SPA':
+            point_label_cup, pt_cup, selected_rater_cup, not_selected_rater_cup, selected_rater_mask_cup = random_click(multi_rater_cup)
+            valid_raters = multi_rater_cup.sum(dim=(1,2,3)) > 0
 
-
-        image_meta_dict = {'filename_or_obj':img_path.split('/')[-1]}
-        return {
-            'image':img,
-            'multi_rater': multi_rater_cup, 
-            'p_label': point_label_cup,
-            'pt':pt_cup, 
-            'selected_rater': selected_rater_cup, 
-            'not_selected_rater': not_selected_rater_cup, 
-            'mask': selected_rater_mask_cup, 
-            'mask_ori': selected_rater_mask_cup_ori,
-            'image_meta_dict':image_meta_dict,
-        }
+            image_meta_dict = {'filename_or_obj':img_path.split('/')[-1]}
+            return {
+                'image':img,
+                'multi_rater': multi_rater_cup, 
+                'p_label': point_label_cup,
+                'pt':pt_cup, 
+                'selected_rater': selected_rater_cup, 
+                'not_selected_rater': not_selected_rater_cup, 
+                'mask': selected_rater_mask_cup, 
+                'image_meta_dict':image_meta_dict,
+                'valid_raters': valid_raters,
+            }
+        
+        else:
+            image_meta_dict = {'filename_or_obj':img_path.split('/')[-1]}
+            valid_raters = multi_rater_cup.sum(dim=(1,2,3)) > 0
+            return {
+                'image':img,
+                'multi_rater': multi_rater_cup, 
+                'image_meta_dict':image_meta_dict,
+                'valid_raters': valid_raters,
+            }

@@ -14,6 +14,7 @@ from tqdm import tqdm
 
 import cfg
 from utils import *
+from multirater_metrics import compute_metrics
 import pandas as pd
 from sklearn.cluster import KMeans
 
@@ -26,7 +27,7 @@ seed = torch.randint(1,11,(args.b,7))
 torch.backends.cudnn.benchmark = True
 
 def train_sam(args, net: nn.Module, optimizer, train_loader,
-          epoch, writer, runs=6, vis = 50):
+          epoch, runs=6):
     epoch_loss = 0
     ind = 0
     
@@ -53,8 +54,25 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
 
             if 'selected_rater' in pack:
                 selected_rater = pack['selected_rater']
-                masks_all = pack['mask'].unsqueeze(1).repeat(1, runs, 1, 1, 1).to(device = GPUdevice)
-                masks_ori_all = pack['mask_ori'].unsqueeze(1).repeat(1, runs, 1, 1, 1).to(device = GPUdevice)
+                m = pack['mask']
+                if m.dim() == 4 and m.size(1) > 1:
+                    pt0 = pack['pt']
+                    B, C, Hh, Ww = m.shape
+                    t = []
+                    for b in range(B):
+                        if pt0 is not None:
+                            y = int(pt0[b,0]); x = int(pt0[b,1])
+                            cls_b = int(m[b, :, y, x].argmax().item())
+                        else:
+                            cls_b = 0
+                        if cls_b == 0:
+                            present = (m[b, 1:, ...].sum(dim=(1,2)) > 0).nonzero(as_tuple=False)
+                            cls_b = int(present[torch.randint(0, present.size(0), (1,))].item()+1) if present.numel() > 0 else 0
+                        t.append(cls_b)
+                    tcls = torch.tensor(t)
+                    idx = tcls.view(-1, 1, 1, 1).expand(-1, 1, m.size(2), m.size(3)) # (B,1,H,W)
+                    m = torch.gather(m, 1, idx)                                      # (B,1,H,W)
+                masks_all = m.unsqueeze(1).repeat(1, runs, 1, 1, 1).to(device=GPUdevice)        
                 
             name = pack['image_meta_dict']['filename_or_obj']
             
@@ -75,8 +93,6 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
 
             for run in range(runs):
                 masks = masks_all[:, run, :, :, :] 
-                masks_ori = masks_ori_all[:, run, :, :, :] 
-
                 
                 '''Train image encoder, combine net(inside image encoder), mask decoder'''
                 # prompt encoder
@@ -133,7 +149,7 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
                     pred_list_image_size.append(pred_image_size)
 
                     # Resize to the output size
-                    pred_output_size = F.interpolate(pred,size=(args.out_size, args.out_size))
+                    pred_output_size = F.interpolate(pred,size=(args.image_size, args.image_size))
                     pred_list_output_size.append(pred_output_size)
 
 
@@ -159,7 +175,7 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
                 # generate multiple options: from 2D to 1D
                 flattened_pred_list = [pred.detach().cpu().numpy().flatten() for pred in pred_list_image_size]  
                 kmeans = KMeans(n_clusters=n_clusters, random_state=0, n_init='auto').fit(flattened_pred_list)
-                target_group = kmeans.predict([masks_ori.cpu().numpy().flatten()])[0] 
+                target_group = kmeans.predict([masks.cpu().numpy().flatten()])[0] 
 
                 flag_select = (kmeans.labels_ == target_group)
                 exclusive_list = [single_imge for single_imge, flag in zip(pred_list_image_size, flag_select) if not flag]
@@ -186,7 +202,7 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
                     select_index = torch.tensor(np.random.randint(len(potential_selected), size = 1))[0]
 
                     pt_temp = potential_selected[select_index]
-                    point_labels_temp = masks_ori[i, 0, pt_temp[0], pt_temp[1]]
+                    point_labels_temp = masks[i, 0, pt_temp[0], pt_temp[1]]
                     pt_temp_list.append(pt_temp)
                     point_labels_temp_list.append(point_labels_temp)
 
@@ -248,7 +264,7 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
                         multimask_output=(args.multimask_output > 1),
                     )
                     # Resize to the ordered output size
-                    pred_list_output.append(F.interpolate(pred,size=(args.out_size,args.out_size)))
+                    pred_list_output.append(F.interpolate(pred,size=(args.image_size, args.image_size)))
             
          
                 # result for out size pred
@@ -290,7 +306,7 @@ def train_sam(args, net: nn.Module, optimizer, train_loader,
                     pred_masks_weights_list_train.append(net.EM_weights.compute_weights(
                         torch.flatten(select_list_mean[i].detach().clone()), weights, means, variances))
                     true_masks_weights_list_train.append(net.EM_weights.compute_weights(
-                        torch.flatten(masks_ori[i]), weights, means, variances))
+                        torch.flatten(masks[i]), weights, means, variances))
                     
                 pred_masks_weights_list_train = torch.stack(pred_masks_weights_list_train, dim=0) #(batch_size, n_components)
                 true_masks_weights_list_train = torch.stack(true_masks_weights_list_train, dim=0) #(batch_size, n_components)
@@ -331,6 +347,10 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, runs=6, selected_rat
     total_dice_list = np.zeros(runs)
 
     lossfunc = criterion_G
+    
+    multi_keys = ["GED","Dice_max","Dice_match","Dice_soft","Dice_personal_mean","Dice_follow","Delta_follow_vs_neutral"]
+    multi_sum_runs = {k: np.zeros(runs, dtype=np.float64) for k in multi_keys}
+    multi_cnt_runs = np.zeros(runs, dtype=np.int64)
 
     with tqdm(total=n_val, desc='Validation round', unit='batch', leave=False) as pbar:
 
@@ -340,23 +360,41 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, runs=6, selected_rat
             name = pack['image_meta_dict']['filename_or_obj']
 
             if 'multi_rater' in pack:
-                multi_rater = pack['multi_rater'].to(dtype = torch.float32, device = GPUdevice) 
+                multi_rater = pack['multi_rater'].to(dtype = torch.float32, device = GPUdevice)
+            valid_raters = pack['valid_raters'].to(device = GPUdevice)
                 
-            if selected_rater_df_path != False: 
-                selected_rater, masks_all, masks_ori_all = selected_rater_from_df(args, multi_rater, name, selected_rater_df_path, epoch)
-                masks_all = masks_all.unsqueeze(1).repeat(1, runs, 1, 1, 1).to(device = GPUdevice)
-                masks_ori_all = masks_ori_all.unsqueeze(1).repeat(1, runs, 1, 1, 1).to(device = GPUdevice)
+            # if selected_rater_df_path != False: 
+            #     selected_rater, masks_all, masks_ori_all = selected_rater_from_df(args, multi_rater, name, selected_rater_df_path, epoch)
+            #     masks_all = masks_all.unsqueeze(1).repeat(1, runs, 1, 1, 1).to(device = GPUdevice)
+            #     masks_ori_all = masks_ori_all.unsqueeze(1).repeat(1, runs, 1, 1, 1).to(device = GPUdevice)
 
-                pt = pack['pt'].unsqueeze(1)
-                point_labels = pack['p_label'].unsqueeze(1)
+            #     pt = pack['pt'].unsqueeze(1)
+            #     point_labels = pack['p_label'].unsqueeze(1)
 
-            else:
-                pt = pack['pt'].unsqueeze(1)
-                point_labels = pack['p_label'].unsqueeze(1)
+            # else:
+            pt = pack['pt'].unsqueeze(1)
+            point_labels = pack['p_label'].unsqueeze(1)
 
-                selected_rater = pack['selected_rater']
-                masks_all = pack['mask'].unsqueeze(1).repeat(1, runs, 1, 1, 1).to(device = GPUdevice)
-                masks_ori_all = pack['mask_ori'].unsqueeze(1).repeat(1, runs, 1, 1, 1).to(device = GPUdevice)
+            selected_rater = pack['selected_rater']
+            m = pack['mask']
+            if m.dim() == 4 and m.size(1) > 1:
+                pt0 = pack['pt']
+                B, C, Hh, Ww = m.shape
+                t = []
+                for b in range(B):
+                    if pt0 is not None:
+                        y = int(pt0[b,0]); x = int(pt0[b,1])
+                        cls_b = int(m[b, :, y, x].argmax().item())
+                    else:
+                        cls_b = 0
+                    if cls_b == 0:
+                        present = (m[b, 1:, ...].sum(dim=(1,2)) > 0).nonzero(as_tuple=False)
+                        cls_b = int(present[torch.randint(0, present.size(0), (1,))].item()+1) if present.numel() > 0 else 0
+                    t.append(cls_b)
+                tcls = torch.tensor(t)
+                idx = tcls.view(-1, 1, 1, 1).expand(-1, 1, m.size(2), m.size(3)) # (B,1,H,W)
+                m = torch.gather(m, 1, idx)                                      # (B,1,H,W)
+            masks_all = m.unsqueeze(1).repeat(1, runs, 1, 1, 1).to(device=GPUdevice)        
                 
             ind += 1
             coords_torch = torch.as_tensor(pt, dtype=torch.float, device=GPUdevice)
@@ -370,7 +408,6 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, runs=6, selected_rat
             means = torch.tensor(net.EM_mean_variance.means, dtype=torch.float, device = GPUdevice)
             variances = torch.tensor(net.EM_mean_variance.variances, dtype=torch.float, device = GPUdevice)
 
-            
             last_pred = None
             
             '''test'''
@@ -386,11 +423,10 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, runs=6, selected_rat
                 # EM_mean_variance
                 means, variances = net.EM_mean_variance(se, pe)
 
-
+            preds_set_list = []
 
             for run in range(runs):
                 masks = masks_all[:, run, :, :, :] 
-                masks_ori = masks_ori_all[:, run, :, :, :] 
                 # showp = coords_torch[:,run,:]
 
                 with torch.no_grad():
@@ -427,7 +463,7 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, runs=6, selected_rat
                         pred_list_image_size.append(pred_image_size)
 
                         # Resize to the output size
-                        pred_output_size = F.interpolate(pred,size=(args.out_size, args.out_size))
+                        pred_output_size = F.interpolate(pred,size=(args.image_size, args.image_size))
                         pred_list_output_size.append(pred_output_size)
 
 
@@ -446,23 +482,13 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, runs=6, selected_rat
 
                     total_loss_list[run] += loss.item()
                     total_eiou_list[run] += temp[0]
-                    total_dice_list[run] += temp[1]
-                    
-                    
-                    '''vis images'''
-                    # if ind % args.vis == 0:
-                    #     namecat = 'Test' + str(ind)
-                    #     # for na in name:
-                    #     #     namecat = namecat + na + '+' #.split('/')[-1].split('.')[0] + '+'
-                    #     vis_image(imgs,output,masks.clone(), os.path.join(args.path_helper['sample_path'], namecat+'epoch+' +str(epoch) + '+iteration+'+str(run+1)+ '.jpg'), reverse=False, points=None)
-
-
+                    total_dice_list[run] += temp[1]                  
 
                     """find the output for specific cluster to remind user"""
                     # from 2D to 1D 
                     flattened_pred_list = [pred.cpu().numpy().flatten() for pred in pred_list_image_size]
                     kmeans = KMeans(n_clusters=n_clusters, random_state=0, n_init='auto').fit(flattened_pred_list)
-                    target_group = kmeans.predict([masks_ori.cpu().numpy().flatten()])[0]
+                    target_group = kmeans.predict([masks.cpu().numpy().flatten()])[0]
 
 
                     for cluster in range(n_clusters):
@@ -477,16 +503,8 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, runs=6, selected_rat
                         temp_select_list = torch.stack(temp_select_list, dim=0) 
                         temp_select_list_mean = torch.mean(temp_select_list, dim=0) 
                         
-                        plot_image = F.interpolate(temp_select_list_mean,size=(args.out_size,args.out_size))
+                        plot_image = F.interpolate(temp_select_list_mean,size=(args.image_size,args.image_size))
                         plot_image = (plot_image> 0.5).float()
-
-                        '''vis images'''
-                        # if ind % args.vis == 0:
-                        #     namecat = 'Test'
-                        #     for na in name:
-                        #         namecat = namecat + na + '+' #.split('/')[-1].split('.')[0] + '+'
-                            #vis_image(imgs,plot_image,masks.clone(), os.path.join(args.path_helper['sample_path'], namecat+'epoch+' +str(epoch) + '+iteration+'+str(run+1)+ '+cluster'+ str(cluster)+'.jpg'), reverse=False, points=None)
-
 
                         # only find pt, label for training weights, mean & variance
                         if cluster == target_group:
@@ -506,7 +524,7 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, runs=6, selected_rat
                                 select_index = torch.tensor(np.random.randint(len(potential_selected), size = 1))[0]
 
                                 pt_temp = potential_selected[select_index]
-                                point_labels_temp = masks_ori[i, 0, pt_temp[0], pt_temp[1]]
+                                point_labels_temp = masks[i, 0, pt_temp[0], pt_temp[1]]
                                 pt_temp_list.append(pt_temp)
                                 point_labels_temp_list.append(point_labels_temp)
 
@@ -535,8 +553,48 @@ def validation_sam(args, val_loader, epoch, net: nn.Module, runs=6, selected_rat
                             torch.flatten(final_select_list_mean[i]), weights, means, variances))
                     pred_masks_weights_list = torch.stack(pred_masks_weights_list, dim=0) 
                         
+                    preds_set_list.append(output.detach().clone())  # dùng logits/binary đều OK
+                    pred_set_so_far = torch.stack(preds_set_list, dim=1)   # (B,M<=run+1,1,H,W)
+
+                    # follow_idx: thử dùng selected_rater nếu hợp lệ
+                    follow_idx = None
+                    if selected_rater is not None:
+                        try:
+                            fi = selected_rater.to(device=GPUdevice).long()
+                            if fi.dim() == 1 and fi.numel() == imgs.size(0):
+                                follow_idx = fi
+                            elif fi.dim() == 2 and fi.size(1) == 1 and fi.size(0) == imgs.size(0):
+                                follow_idx = fi.view(-1)
+                        except Exception:
+                            follow_idx = None
+
+                    mbh_now = compute_metrics(
+                        preds_single=output,           # (B,1,H,W)
+                        raters=multi_rater,                    # (B,R,H,W) or (B,R,1,H,W)
+                        valid_raters=valid_raters,             # (B,R) or None
+                        pred_set=pred_set_so_far,              # (B,M,1,H,W)
+                        follow_idx=follow_idx,                 # (B,) or None
+                        dice_match_norm="gt",
+                        dice_max_symmetric=False,
+                        run=run+1,                             # để dict có 'run'
+                    )
+                    for k in multi_keys:
+                        multi_sum_runs[k][run] += float(mbh_now[k])
+                    multi_cnt_runs[run] += 1
 
             pbar.update()
 
-    return total_loss_list/ n_val , tuple([total_eiou_list/n_val, total_dice_list/n_val])
+    total_loss_list = total_loss_list / n_val
+    total_eiou_list = total_eiou_list / n_val
+    total_dice_list = total_dice_list / n_val
+
+    multi_avg_by_run = []
+    for r in range(runs):
+        rec = {"run": r}
+        denom = max(1, multi_cnt_runs[r])
+        for k in multi_keys:
+            rec[k] = multi_sum_runs[k][r] / denom
+        multi_avg_by_run.append(rec)
+    
+    return total_loss_list/ n_val , tuple([total_eiou_list/n_val, total_dice_list/n_val]), multi_avg_by_run
 

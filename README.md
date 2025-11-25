@@ -10,7 +10,7 @@ and [SPA webpage](https://ImprintLab.github.io/SPA/).
  <div align="center"><img width="880" height="400" src="https://github.com/SuperMedIntel/SPA/blob/main/static/assets/images/facial.png"></div>
 Our uncertainty-aware interactive segmentation model, <b>SPA</b>, efficiently achieves segmentations whose decisions on uncertain pixels are aligned with users preferences. This is achieved by modeling uncertainties and human interactions. At inference time, users are presented with one recommended prediction and a few representative segmentations that capture uncertainty, allowing users to select the one best aligned with their clinical needs. If the user is unsatisfied with the recommended prediction, the model learns from the users' selections, adapts itself, and presents users a new set of representative segmentations. Our approach minimizes user interactions and eliminates the need for painstaking pixel-wise adjustments compared to conventional interactive segmentation models.
 
-## 🧐 Requirement
+## Requirement
 
  Install the environment:
 
@@ -20,7 +20,7 @@ Our uncertainty-aware interactive segmentation model, <b>SPA</b>, efficiently ac
 
  ``pip install -r requirements.txt``
 
-## 🎯 Example Cases
+## Datasets and Pretrains
 **Step1:** Download MedSAM pretrained weight and put in the ``./checkpoint/`` folder, create the folder if it does not exist ⚒️
  [MedSAM checkpoint](https://drive.google.com/drive/folders/1ETWmi4AiniJeWOt6HAsYgTjYv_fkgzoN?usp=drive_link) -> Select `medsam_vit_b.pth` file.
  
@@ -78,11 +78,10 @@ data/
 
 
 **Step3:** Run the training by:
- <!-- ``python train.py -net sam -mod sam -exp_name 'REFUGE_SPA' -sam_ckpt ./checkpoint/medsam_vit_b.pth -image_size 512 -out_size 256 -b 4 -val_freq 1 -dataset REFUGE -data_path './data/REFUGE'`` -->
 
-``python train.py -exp_name 'LIDC_SPA' -sam_ckpt ./checkpoint/medsam_vit_b.pth -image_size 128 -out_size 128 -b 16 -dataset LIDC -data_path './data/LIDC' -num_samples 48 -n_clusters 4 -n_components 16``
+``python train.py -exp_name 'LIDC_SPA' -sam_ckpt ./checkpoint/medsam_vit_b.pth -image_size 128 -b 16 -dataset LIDC -data_path './data/LIDC' -num_samples 48 -n_clusters 4 -n_components 16``
 
-``python train.py -exp_name 'MBHSeg_Binary_SPA' -sam_ckpt ./checkpoint/medsam_vit_b.pth -image_size 128 -out_size 128 -b 16 -dataset MBHSeg-Binary -data_path './data/MBHSeg-Binary' -num_samples 48 -n_clusters 4 -n_components 16``
+``python train.py -exp_name 'MBHSeg_Binary_SPA' -sam_ckpt ./checkpoint/medsam_vit_b.pth -image_size 128 -b 16 -dataset MBHSeg-Binary -data_path './data/MBHSeg-Binary' -num_samples 48 -n_clusters 4 -n_components 16``
 
 Other configs to try are listed in `bash.sh`
 

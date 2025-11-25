@@ -180,17 +180,24 @@ def save_image(
     
 
 def create_logger(log_dir, phase='train'):
-    time_str = time.strftime('%Y-%m-%d-%H-%M')
-    log_file = '{}_{}.log'.format(time_str, phase)
-    final_log_file = os.path.join(log_dir, log_file)
-    head = '%(asctime)-15s %(message)s'
-    logging.basicConfig(filename=str(final_log_file),
-                        format=head)
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    console = logging.StreamHandler()
-    logging.getLogger('').addHandler(console)
+    os.makedirs(log_dir, exist_ok=True)
 
+    time_str = time.strftime('%Y-%m-%d-%H-%M')
+    log_file = f'{time_str}_{phase}.log'
+    final_log_file = os.path.join(log_dir, log_file)
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)-15s %(message)s',
+        handlers=[
+            logging.FileHandler(final_log_file, mode='a', encoding='utf-8'),
+            logging.StreamHandler()
+        ],
+        force=True
+    )
+
+    logger = logging.getLogger()  # root logger
+    logger.info('Logger is ready.')
     return logger
 
 
@@ -216,9 +223,9 @@ def set_log_dir(root_dir, exp_name):
     path_dict['log_path'] = log_path
 
     # set sample image path for fid calculation
-    sample_path = os.path.join(prefix, 'Samples')
-    os.makedirs(sample_path)
-    path_dict['sample_path'] = sample_path
+    # sample_path = os.path.join(prefix, 'Samples')
+    # os.makedirs(sample_path)
+    # path_dict['sample_path'] = sample_path
 
     return path_dict
 
@@ -416,7 +423,7 @@ def eval_seg(pred,true_mask_p,threshold):
         return eiou / len(threshold), edice / len(threshold)
 
 
-def random_click(multi_rater, mask_size):
+def random_click(multi_rater):
 
     multi_rater_mean = np.mean(np.array(multi_rater.squeeze(1)), axis=0)
 
@@ -447,12 +454,9 @@ def random_click(multi_rater, mask_size):
         not_selected_rater_index = torch.tensor([not_selected_rater_index])
 
     # ground truth: mean of selected raters' masks
-    selected_rater_mask_ori = multi_rater[selected_rater_index,:,:,:]
-    selected_rater_mask = F.interpolate(selected_rater_mask_ori, size=(mask_size, mask_size), mode='bilinear', align_corners=False).mean(dim=0) # torch.Size([1, mask_size, mask_size])
+    selected_rater_mask = multi_rater[selected_rater_index,:,:,:]
+    selected_rater_mask = selected_rater_mask.mean(dim=0) # torch.Size([1, mask_size, mask_size])
     selected_rater_mask = (selected_rater_mask >= 0.5).float() # torch.Size([1, mask_size, mask_size])
-
-    selected_rater_mask_ori = selected_rater_mask_ori.mean(dim=0) # torch.Size([1, img_size, img_size])
-    selected_rater_mask_ori = (selected_rater_mask_ori >= 0.5).float() # torch.Size([1, img_size, img_size])
 
     # propose point
     point_label, pt = agree_click(np.mean(np.array(multi_rater.squeeze(1)), axis=0), label = 1)
@@ -465,15 +469,8 @@ def random_click(multi_rater, mask_size):
     selected_rater[selected_rater_index] = 1
     not_selected_rater[not_selected_rater_index] = 1
 
-    return point_label, pt, selected_rater, not_selected_rater, selected_rater_mask, selected_rater_mask_ori
+    return point_label, pt, selected_rater, not_selected_rater, selected_rater_mask
 
-
-def random_click_LIDC(mask, point_label = 1):
-    max_label = max(set(mask.flatten()))
-    if round(max_label) == 0:
-        point_label = round(max_label)
-    indices = np.argwhere(mask == max_label) 
-    return point_label, indices[np.random.randint(len(indices))]
 
 def agree_click(mask, label = 1):
     # max agreement position
@@ -483,6 +480,92 @@ def agree_click(mask, label = 1):
         indices = np.argwhere(mask == label) 
     return label, indices[np.random.randint(len(indices))]
 
+def random_click_multiclass(multi_rater: torch.Tensor):
+    """
+    multi_rater: (R, C, H, W), one-hot; 0=BG, 1..C-1=FG
+    Return:
+      point_label (int),
+      pt (np.array [y,x]),
+      selected_rater (np[R] 0/1),
+      not_selected_rater (np[R] 0/1),
+      selected_rater_mask (torch.FloatTensor [C,H,W], one-hot)
+    """
+    assert multi_rater.ndim == 4, "Expect (R, C, H, W)"
+    R, C, H, W = multi_rater.shape
+    device = multi_rater.device
+
+    present_any = (multi_rater > 0.5).any(dim=0)          # (C,H,W) bool
+    present_any_np = present_any.detach().cpu().numpy()
+    
+    diver_mask = (present_any.sum(dim=0) >= 2)
+    diver_mask_np = diver_mask.detach().cpu().numpy()
+    fg_classes = list(range(1, C))
+    fg_in_div = [c for c in fg_classes if np.any(present_any_np[c] & diver_mask_np)]
+
+    if len(fg_in_div)>0 and random.random() < 0.8:
+        point_label = int(random.choice(fg_in_div))
+    else:
+        fg_present = [c for c in fg_classes if present_any[c].any().item()]
+        point_label = int(random.choice(fg_present)) if fg_present else 0
+        
+    if point_label != 0:
+        cand = np.argwhere(present_any_np[point_label] & diver_mask_np)
+        if len(cand) == 0:
+            cand = np.argwhere(present_any_np[point_label])
+    else:
+        cand = np.argwhere(diver_mask_np)
+        if len(cand) == 0:
+            cand = np.argwhere(present_any_np[0])
+        if len(cand) == 0:
+            cand = np.array([[np.random.randint(H), np.random.randint(W)]], dtype=np.int64)
+
+    pt = cand[np.random.randint(len(cand))]
+    y, x = int(pt[0]), int(pt[1])
+
+    counts_at_pt = (multi_rater[:, :, y, x] > 0.5).sum(dim=0)   # (C,)
+    present_at_pt = torch.nonzero(counts_at_pt > 0, as_tuple=False).squeeze(1).tolist()
+
+    if present_at_pt:
+        fg_present_at_pt = [c for c in present_at_pt if c != 0]
+        if fg_present_at_pt:
+            fg_counts = counts_at_pt[fg_present_at_pt]                  # (#fg,)
+            max_fg = int(fg_counts.max().item())
+            tie_idxs = (fg_counts == max_fg).nonzero(as_tuple=False).squeeze(1).tolist()
+            maj_fg = int(fg_present_at_pt[random.choice(tie_idxs)])     # break tie trong FG
+            if random.random() < 0.8:
+                point_label = maj_fg
+            else:
+                fg_others = [c for c in fg_present_at_pt if c != maj_fg]
+                point_label = int(random.choice(fg_others)) if fg_others else maj_fg
+        else:
+            point_label = 0
+    else:
+        point_label = 0
+
+
+    sel_idx = torch.nonzero(multi_rater[:, point_label, y, x] > 0.5, as_tuple=False).squeeze()
+    if sel_idx.ndim == 0 and sel_idx.numel() > 0:
+        sel_idx = torch.tensor([sel_idx.item()], device=device)
+    if sel_idx.numel() == 0:
+
+        sel_idx = torch.arange(R, device=device)
+
+    not_sel_idx = torch.tensor([i for i in range(R) if i not in set(sel_idx.tolist())],
+                               device=device, dtype=torch.long)
+
+    sel_mask_soft = multi_rater[sel_idx].float().mean(dim=0)     # (C,H,W)
+    label_map = sel_mask_soft.argmax(dim=0)                      # (H,W)
+    selected_rater_mask = F.one_hot(label_map, num_classes=C).permute(2,0,1).float().to(device)
+
+    # Vectors 0/1
+    selected_rater = np.zeros(R, dtype=np.float32)
+    not_selected_rater = np.zeros(R, dtype=np.float32)
+    if sel_idx.numel() > 0:
+        selected_rater[sel_idx.detach().cpu().numpy()] = 1.0
+    if not_sel_idx.numel() > 0:
+        not_selected_rater[not_sel_idx.detach().cpu().numpy()] = 1.0
+
+    return int(point_label), pt, selected_rater, not_selected_rater, selected_rater_mask
 
 def random_box(multi_rater):
     max_value = torch.max(multi_rater[:,0,:,:], dim=0)[0]

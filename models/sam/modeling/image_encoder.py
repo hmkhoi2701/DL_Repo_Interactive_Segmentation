@@ -138,8 +138,9 @@ class ImageEncoderViT(nn.Module):
         # sampling multi times and combine with feature
         feature_list = []
         for _ in range(num_sample):
-
             normal_samples = torch.randn(feature.size(0), self.fcomb_latent_dim, device = x.device)
+            if num_sample == 1:
+                normal_samples = normal_samples * 0.0
             
             means_expanded = means.unsqueeze(0).unsqueeze(0).expand(feature.size(0), self.fcomb_latent_dim, means.size(0))
             variances_expanded = variances.unsqueeze(0).unsqueeze(0).expand(feature.size(0), self.fcomb_latent_dim, variances.size(0))

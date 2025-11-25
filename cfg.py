@@ -3,6 +3,7 @@ import argparse
 
 def parse_args():    
     parser = argparse.ArgumentParser()
+    parser.add_argument('-mode', type=str, default='AESPA', help='model type', choices=['AESPA','SPA'])
     parser.add_argument('-num_samples', type=int, default=48, help='number of samples for each image')
     parser.add_argument('-n_clusters', type=int, default=4, help='number of clusters for em')
     parser.add_argument('-n_components', type=int, default=16, help='number of components for em')
@@ -19,7 +20,6 @@ def parse_args():
     parser.add_argument('-sim_gpu', type=int, default=0, help='split sim to this gpu')
     parser.add_argument('-epoch_ini', type=int, default=1, help='start epoch')
     parser.add_argument('-image_size', type=int, default=256, help='image_size')
-    parser.add_argument('-out_size', type=int, default=256, help='output_size')
     parser.add_argument('-patch_size', type=int, default=2, help='patch_size')
     parser.add_argument('-dim', type=int, default=512, help='dim_size')
     parser.add_argument('-depth', type=int, default=1, help='depth')

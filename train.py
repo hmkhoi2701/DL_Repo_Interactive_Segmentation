@@ -20,6 +20,7 @@ from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
 import cfg
 import function
+import function_aespa
 from conf import settings
 from dataset import *
 from utils import *
@@ -40,7 +41,7 @@ net.EM_mean_variance = EMMeanVariance(se_dim = 256, pe_dim = 256, n_components=a
 optimizer = optim.Adam(net.parameters(), lr=args.lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False) 
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5) 
 
-args.path_helper = set_log_dir('logs', args.exp_name)
+args.path_helper = set_log_dir('logs_new', args.exp_name)
 logger = create_logger(args.path_helper['log_path'])
 logger.info(args)
 
@@ -51,18 +52,8 @@ transform_train = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-transform_train_seg = transforms.Compose([
-    transforms.Resize((args.out_size,args.out_size)),
-    transforms.ToTensor(),
-])
-
 transform_test = transforms.Compose([
     transforms.Resize((args.image_size, args.image_size)),
-    transforms.ToTensor(),
-])
-
-transform_test_seg = transforms.Compose([
-    transforms.Resize((args.out_size,args.out_size)),
     transforms.ToTensor(),
 ])
 
@@ -91,19 +82,14 @@ elif args.dataset == 'MBHSeg-Binary':
     nice_train_loader = DataLoader(mbhseg_binary_train_dataset, batch_size=args.b, shuffle=True, pin_memory=True)
     nice_test_loader = DataLoader(mbhseg_binary_test_dataset, batch_size=args.b, shuffle=False, pin_memory=True)
     '''end'''
+elif args.dataset == 'MBHSeg-Multiclass':
+    '''MBHSeg-Multiclass data'''
+    mbhseg_multiclass_train_dataset = MBHSeg_Multiclass(args, args.data_path, transform = transform_train, mode = 'train')
+    mbhseg_multiclass_test_dataset = MBHSeg_Multiclass(args, args.data_path, transform = transform_test, mode = 'test')
 
-'''checkpoint path and tensorboard'''
-checkpoint_path = os.path.join(settings.CHECKPOINT_PATH, f'{args.dataset}_{args.num_samples}_{args.n_clusters}_{args.n_components}_{settings.TIME_NOW}')
-#use tensorboard
-if not os.path.exists(settings.LOG_DIR):
-    os.mkdir(settings.LOG_DIR)
-writer = SummaryWriter(log_dir=os.path.join(
-        settings.LOG_DIR, f'{args.dataset}_{args.num_samples}_{args.n_clusters}_{args.n_components}_{settings.TIME_NOW}'))
-
-#create checkpoint folder to save model
-if not os.path.exists(checkpoint_path):
-    os.makedirs(checkpoint_path)
-checkpoint_path = os.path.join(checkpoint_path, '{net}-{epoch}-{type}.pth')
+    nice_train_loader = DataLoader(mbhseg_multiclass_train_dataset, batch_size=args.b, shuffle=True, pin_memory=True)
+    nice_test_loader = DataLoader(mbhseg_multiclass_test_dataset, batch_size=args.b, shuffle=False, pin_memory=True)
+    '''end'''
 
 '''begain training'''
 best_dice = 0.0
@@ -112,7 +98,10 @@ for epoch in range(settings.EPOCH):
         
     net.train()
     time_start = time.time()
-    loss = function.train_sam(args, net, optimizer, nice_train_loader, epoch, writer, vis = args.vis)
+    if args.mode == 'SPA':
+        loss = function.train_sam(args, net, optimizer, nice_train_loader, epoch)
+    elif args.mode == 'AESPA':
+        loss = function_aespa.train_sam(args, net, optimizer, nice_train_loader, epoch)
     logger.info(f'Train loss: {loss} || @ epoch {epoch}.')
     time_end = time.time()
     print('time_for_training ', time_end - time_start)
@@ -121,8 +110,11 @@ for epoch in range(settings.EPOCH):
     if epoch % args.val_freq == 0 or epoch == settings.EPOCH-1:
 
         time_start = time.time()
-        tol, (eiou, edice) = function.validation_sam(args, nice_test_loader, epoch, net, selected_rater_df_path=False)
-        logger.info(f'Total score: {tol}, IOU: {eiou}, DICE: {edice} || @ epoch {epoch}.')
+        if args.mode == 'SPA':
+            tol, (eiou, edice), mabr = function.validation_sam(args, nice_test_loader, epoch, net, selected_rater_df_path=False)
+        elif args.mode == 'AESPA':
+            tol, (eiou, edice), mabr = function_aespa.validation_sam(args, nice_test_loader, epoch, net, selected_rater_df_path=False)
+        logger.info(f'Total score: {tol}, IOU: {eiou}, DICE: {edice}, MABR: {mabr} || @ epoch {epoch}.')
         time_end = time.time()
         print('time_for_validation ', time_end - time_start)
 
@@ -142,5 +134,3 @@ for epoch in range(settings.EPOCH):
         }, is_best, args.path_helper['ckpt_path'], filename="best_checkpoint")
         else:
             is_best = False
-
-writer.close()
