@@ -4,7 +4,7 @@ for Interactive Medical Image Segmentation</h1>
 Project for the course AI7102 - Introduction to Deep Learning at MBZUAI, Fall 2025
 
 ## Overview 
- <div align="center"><img width="880" height="400" src="assets/arch.png"></div>
+ <div align="center"><img width="880" height="500" src="assets/arch.png"></div>
 AESPA is a preference-aware interactive segmentation model built on top of MedSAM for medical images with multiple annotators (multi-rater). Instead of learning a single “gold” mask, AESPA explicitly models each annotator’s style: given user clicks, the model predicts a segmentation aligned with that rater’s annotations.
 
 ## What we developed
