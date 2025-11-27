@@ -1,10 +1,3 @@
-# train.py
-#!/usr/bin/env	python3
-
-""" valuate network using pytorch
-    Jiayuan Zhu
-"""
-
 import os
 import numpy as np
 import torch
@@ -37,7 +30,7 @@ assert os.path.exists(args.weights)
 checkpoint_file = os.path.join(args.weights)
 assert os.path.exists(checkpoint_file)
 loc = 'cuda:{}'.format(args.gpu_device)
-checkpoint = torch.load(checkpoint_file, map_location=loc)
+checkpoint = torch.load(checkpoint_file, weights_only = False)
 epoch = 0 #checkpoint['epoch'] - 1
 
 state_dict = checkpoint['state_dict']
@@ -45,11 +38,6 @@ net.load_state_dict(state_dict)
 net.EM_weights.weights = checkpoint['EM_weights']
 net.EM_mean_variance.means = checkpoint['EM_means']
 net.EM_mean_variance.variances = checkpoint['EM_variances']
-
-
-# args.path_helper = set_log_dir('logs', args.exp_name)
-# logger = create_logger(args.path_helper['log_path'])
-# logger.info(args)
 
 '''segmentation data'''
 transform_train = transforms.Compose([
@@ -65,34 +53,22 @@ transform_test = transforms.Compose([
 '''data end'''
 if args.dataset == 'REFUGE':
     '''REFUGE data'''
-    refuge_train_dataset = REFUGE(args, args.data_path, transform = transform_train, mode = 'Training')
     refuge_test_dataset = REFUGE(args, args.data_path, transform = transform_test, mode = 'Test')
-
-    nice_train_loader = DataLoader(refuge_train_dataset, batch_size=args.b, shuffle=True, pin_memory=True)
     nice_test_loader = DataLoader(refuge_test_dataset, batch_size=args.b, shuffle=False, pin_memory=True)
     '''end'''
 elif args.dataset == 'LIDC':
     '''LIDC data'''
-    lidc_train_dataset = LIDC(args, args.data_path, transform = transform_train, mode = 'train')
     lidc_test_dataset = LIDC(args, args.data_path, transform = transform_test, mode = 'test')
-
-    nice_train_loader = DataLoader(lidc_train_dataset, batch_size=args.b, shuffle=True, pin_memory=True)
     nice_test_loader = DataLoader(lidc_test_dataset, batch_size=args.b, shuffle=False, pin_memory=True)
     '''end'''
 elif args.dataset == 'MBHSeg-Binary':
     '''MBHSeg-Binary data'''
-    mbhseg_binary_train_dataset = MBHSeg_Binary(args, args.data_path, transform = transform_train, mode = 'train')
     mbhseg_binary_test_dataset = MBHSeg_Binary(args, args.data_path, transform = transform_test, mode = 'test')
-
-    nice_train_loader = DataLoader(mbhseg_binary_train_dataset, batch_size=args.b, shuffle=True, pin_memory=True)
     nice_test_loader = DataLoader(mbhseg_binary_test_dataset, batch_size=args.b, shuffle=False, pin_memory=True)
     '''end'''
 elif args.dataset == 'MBHSeg-Multiclass':
     '''MBHSeg-Multiclass data'''
-    mbhseg_multiclass_train_dataset = MBHSeg_Multiclass(args, args.data_path, transform = transform_train, mode = 'train')
     mbhseg_multiclass_test_dataset = MBHSeg_Multiclass(args, args.data_path, transform = transform_test, mode = 'test')
-
-    nice_train_loader = DataLoader(mbhseg_multiclass_train_dataset, batch_size=args.b, shuffle=True, pin_memory=True)
     nice_test_loader = DataLoader(mbhseg_multiclass_test_dataset, batch_size=args.b, shuffle=False, pin_memory=True)
     '''end'''
 

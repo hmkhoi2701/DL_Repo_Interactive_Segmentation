@@ -1,10 +1,3 @@
-# train.py
-#!/usr/bin/env	python3
-
-""" train network using pytorch
-    Jiayuan Zhu
-"""
-
 import argparse
 import os
 import sys
@@ -120,7 +113,6 @@ for epoch in range(settings.EPOCH):
 
         if  max(edice) > best_dice:
             best_dice = max(edice)
-            is_best = True
 
             save_checkpoint({
             'epoch': epoch + 1,
@@ -131,6 +123,4 @@ for epoch in range(settings.EPOCH):
             'EM_weights': net.EM_weights.weights,  
             'EM_means': net.EM_mean_variance.means,  
             'EM_variances': net.EM_mean_variance.variances,  
-        }, is_best, args.path_helper['ckpt_path'], filename="best_checkpoint")
-        else:
-            is_best = False
+        }, args.path_helper['ckpt_path'], filename="checkpoint_best.pth")
